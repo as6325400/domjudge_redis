@@ -1,0 +1,103 @@
+version: '3'
+
+services:
+  # domserver
+  domserver:
+    depends_on:
+      - db
+      - redis
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - 8080:80
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - ${PWD}/php.ini:/etc/php/8.2/fpm/php.ini
+      - ${PWD}/framework.yaml:/opt/domjudge/domserver/webapp/config/packages/framework.yaml
+      - ${PWD}/services.yaml:/opt/domjudge/domserver/webapp/config/services.yaml
+    environment:
+      CONTAINER_TIMEZONE: Asia/Taipei
+      MYSQL_DATABASE: domjudge
+      MYSQL_HOST: db
+      MYSQL_USER: domjudge
+      MYSQL_PASSWORD: domjudge
+      MYSQL_ROOT_PASSWORD: root
+      REDIS_HOST: redis 
+    networks:
+      - domjudge
+
+  # database
+  db:
+    image: mariadb
+    restart: always
+    # volumes:
+    #   - db-data:/var/lib/mysql 
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: domjudge
+      MYSQL_PASSWORD: domjudge
+      MYSQL_DATABASE: domjudge
+    networks:
+      - domjudge
+    command: 
+        --max-connections=1000
+        --max-allowed-packet=512M
+        --innodb_log_file_size=512M
+
+  # phpmyadmin
+  phpmyadmin:
+    depends_on:
+      - db
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    ports:
+      - 9010:80
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: root 
+    networks:
+      - domjudge
+
+  # judgehost
+  judge-01:
+    depends_on:
+      - domserver
+    image: domjudge/judgehost:8.3.0
+    restart: always
+    privileged: true
+    hostname: judgehost
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    environment:
+      DAEMON_ID: 0
+      DOMSERVER_BASEURL: http://domserver:80/
+      JUDGEDAEMON_PASSWORD: FjAzRXNim6nuuYhlukONYot/98OI/56M
+      CONTAINER_TIMEZONE: Asia/Taipei
+    networks:
+      - domjudge
+
+  # Redis 
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - 6379:6379
+    networks:
+      - domjudge
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    restart: always
+    ports:
+      - 5540:5540  
+    networks:
+      - domjudge
+
+
+# volumes:
+#   db-data:
+
+networks:
+  domjudge:
